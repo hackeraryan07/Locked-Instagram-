@@ -18,6 +18,9 @@ sealed class PinState {
 
 class MainViewModel(private val repository: PinRepository) : ViewModel() {
 
+    private val _isUnlocked = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isUnlocked: StateFlow<Boolean> = _isUnlocked
+
     val pinState: StateFlow<PinState> = repository.pin
         .map { pin -> if (pin == null) PinState.Setup else PinState.Exists(pin) }
         .stateIn(
@@ -30,6 +33,10 @@ class MainViewModel(private val repository: PinRepository) : ViewModel() {
         viewModelScope.launch {
             repository.savePin(pin)
         }
+    }
+
+    fun setUnlocked(unlocked: Boolean) {
+        _isUnlocked.value = unlocked
     }
 }
 

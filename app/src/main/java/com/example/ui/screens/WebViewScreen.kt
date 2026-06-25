@@ -53,6 +53,10 @@ fun WebViewScreen(url: String) {
                         mediaPlaybackRequiresUserGesture = false
                     }
 
+                    val cookieManager = android.webkit.CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
+
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             super.onPageStarted(view, url, favicon)

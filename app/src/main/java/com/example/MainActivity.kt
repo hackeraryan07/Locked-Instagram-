@@ -29,79 +29,77 @@ import androidx.compose.ui.Modifier
 
 class MainActivity : ComponentActivity() {
 
+  private lateinit var viewModel: MainViewModel
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
 
     val repository = PinRepository(applicationContext)
     val viewModelFactory = MainViewModelFactory(repository)
-    val viewModel = ViewModelProvider(this, viewModelFactory)[MainViewModel::class.java]
+    viewModel = ViewModelProvider(this, viewModelFactory)[MainViewModel::class.java]
 
     setContent {
       MyApplicationTheme(darkTheme = true) {
-        val navController = rememberNavController()
         val pinState = viewModel.pinState.collectAsStateWithLifecycle().value
+        val isUnlocked = viewModel.isUnlocked.collectAsStateWithLifecycle().value
 
-        NavHost(
-            navController = navController,
-            startDestination = "pin_check"
-        ) {
-            composable("pin_check") {
-                when (pinState) {
-                    is PinState.Loading -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                    is PinState.Setup -> {
-                        PinScreen(
-                            isSetup = true,
-                            expectedPin = null,
-                            onPinSuccess = { newPin ->
-                                viewModel.savePin(newPin)
-                                navController.navigate("webview") {
-                                    popUpTo("pin_check") { inclusive = true }
-                                }
-                            }
-                        )
-                    }
-                    is PinState.Exists -> {
-                        PinScreen(
-                            isSetup = false,
-                            expectedPin = pinState.pin,
-                            onPinSuccess = {
-                                navController.navigate("webview") {
-                                    popUpTo("pin_check") { inclusive = true }
-                                }
-                            }
-                        )
-                    }
+        when (val state = pinState) {
+            is PinState.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
+            is PinState.Setup -> {
+                PinScreen(
+                    isSetup = true,
+                    expectedPin = null,
+                    onPinSuccess = { newPin ->
+                        viewModel.savePin(newPin)
+                        viewModel.setUnlocked(true)
+                    }
+                )
+            }
+            is PinState.Exists -> {
+                if (!isUnlocked) {
+                    PinScreen(
+                        isSetup = false,
+                        expectedPin = state.pin,
+                        onPinSuccess = {
+                            viewModel.setUnlocked(true)
+                        }
+                    )
+                } else {
+                    // Enter immersive mode
+                    val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+                    windowInsetsController.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
-            composable("webview") {
-                // Enter immersive mode
-                val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-                windowInsetsController.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
-
-                WebViewScreen(url = "https://www.instagram.com/")
+                    WebViewScreen(url = "https://www.instagram.com/")
+                }
             }
         }
       }
     }
   }
 
-  // Restore system bars when leaving
-  override fun onDestroy() {
-    super.onDestroy()
-    val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-    windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+  override fun onStop() {
+    super.onStop()
+    
+    android.webkit.CookieManager.getInstance().flush()
+
+    if (!isChangingConfigurations) {
+        viewModel.setUnlocked(false)
+        
+        // Restore system bars when leaving
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+    }
   }
 }
